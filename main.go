@@ -79,10 +79,10 @@ func main() {
 	}
 
 	// Calculate cutoff date
-	cutoffYears := 1 // default value
+	cutoffYears := -1 // default value
 	if cutoffYearsStr := os.Getenv("X_CUTOFF_YEARS"); cutoffYearsStr != "" {
 		if years, err := strconv.Atoi(cutoffYearsStr); err == nil {
-			cutoffYears = years
+			cutoffYears = -years
 		}
 	}
 	cutoffTime := time.Now().AddDate(cutoffYears, 0, 0)
