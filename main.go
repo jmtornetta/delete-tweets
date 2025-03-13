@@ -61,9 +61,8 @@ func main() {
 	}
 
 	// Get user ID from environment or lookup from username
-	var userID string
-	if envUserID := os.Getenv("X_USERID"); envUserID != "" {
-		userID = envUserID
+	userID := os.Getenv("X_USERID")
+	if userID != "" {
 		log.Printf("Using user ID from environment: %s\n", userID)
 	} else {
 		username := os.Getenv("X_USERNAME")
@@ -79,20 +78,26 @@ func main() {
 	}
 
 	// Calculate cutoff date
-	cutoffYears := -1 // default value
-	if cutoffYearsStr := os.Getenv("X_CUTOFF_YEARS"); cutoffYearsStr != "" {
-		if years, err := strconv.Atoi(cutoffYearsStr); err == nil {
-			cutoffYears = -years
-		}
+	cutoffYearsStr := os.Getenv("X_LIMIT_YEARS_PRIOR")
+	if cutoffYearsStr == "" {
+		log.Fatal("X_LIMIT_YEARS_PRIOR not found in environment")
 	}
+	years, err := strconv.Atoi(cutoffYearsStr)
+	if err != nil {
+		log.Fatalf("Invalid X_LIMIT_YEARS_PRIOR value: %v", err)
+	}
+	cutoffYears := -years
 	cutoffTime := time.Now().AddDate(cutoffYears, 0, 0)
 	fmt.Printf("Fetching tweets older than: %s\n", cutoffTime.Format("2006-01-02"))
 
-	maxResults := 5 // default value
-	if limitStr := os.Getenv("X_LIMIT_TWEET_FETCH"); limitStr != "" {
-		if limit, err := strconv.Atoi(limitStr); err == nil {
-			maxResults = limit
-		}
+	// Get max results from environment
+	limitStr := os.Getenv("X_LIMIT_TWEET_FETCH")
+	if limitStr == "" {
+		log.Fatal("X_LIMIT_TWEET_FETCH not found in environment")
+	}
+	maxResults, err := strconv.Atoi(limitStr)
+	if err != nil {
+		log.Fatalf("Invalid X_LIMIT_TWEET_FETCH value: %v", err)
 	}
 
 	// Get tweets with proper options
@@ -111,22 +116,34 @@ func main() {
 	}
 
 	// Process tweets
+	var tweetsToDelete []twitter.TweetObj
 	for _, tweet := range tweets.Raw.Tweets {
 		createdAt, err := time.Parse(time.RFC3339, tweet.CreatedAt)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error parsing time for tweet %s: %v\n", tweet.ID, err)
 			continue
 		}
-
 		if createdAt.Before(cutoffTime) {
-			fmt.Printf("Would delete tweet ID %s: %s\n", tweet.ID, tweet.Text)
-			// Uncomment to actually delete tweets
-			// _, err := client.DeleteTweet(context.Background(), tweet.ID)
-			// if err != nil {
-			//     fmt.Fprintf(os.Stderr, "Error deleting tweet %s: %v\n", tweet.ID, err)
-			// } else {
-			//     fmt.Printf("Deleted tweet %s\n", tweet.ID)
-			// }
+			fmt.Printf("ID %s on %s: %s\n", tweet.ID, tweet.CreatedAt, tweet.Text)
+			tweetsToDelete = append(tweetsToDelete, *tweet)
 		}
+	}
+
+	fmt.Printf("Delete all tweets? (y/n)")
+	var response string
+	fmt.Scanln(&response)
+	if response != "y" {
+		fmt.Println("Skipping deletion")
+		return
+	}
+
+	// Delete tweets
+	for _, tweet := range tweetsToDelete {
+		// _, err := client.DeleteTweet(context.Background(), tweet.ID)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "Error deleting tweet %s: %v\n", tweet.ID, err)
+			continue
+		}
+		fmt.Printf("[Would have] Deleted tweet %s\n", tweet.ID)
 	}
 }
